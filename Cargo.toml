@@ -1,0 +1,8 @@
+[package]
+name = "lilv"
+version = "0.1.0"
+authors = ["Artem Popov <artfwo@gmail.com>"]
+
+[dependencies]
+libc = "0.2"
+lv2 = { git = "https://github.com/artfwo/lv2" }
