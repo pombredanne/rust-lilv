@@ -23,6 +23,10 @@ struct LilvInstance {
     pimpl: *mut libc::c_void
 }
 
+pub struct Plugins {
+    plugins: *const LilvPlugins
+}
+
 pub struct World { world: *mut LilvWorld }
 pub struct Plugin { plugin: *const LilvPlugin }
 pub struct Node { node: *const LilvNode }
@@ -99,6 +103,44 @@ extern {
     fn lilv_port_get_name(plugin: *const LilvPlugin, port: *const LilvPort) -> *mut LilvNode;
 }
 
+impl IntoIterator for Plugins {
+    type Item = Plugin;
+    type IntoIter = PluginsIterator;
+
+    fn into_iter(self) -> Self::IntoIter {
+        unsafe {
+            PluginsIterator {
+                plugins: self.plugins,
+                iter: lilv_plugins_begin(self.plugins),
+            }
+        }
+    }
+}
+
+pub struct PluginsIterator {
+    plugins: *const LilvPlugins,
+    iter: *mut LilvIter,
+}
+
+impl Iterator for PluginsIterator {
+    type Item = Plugin;
+
+    fn next(&mut self) -> Option<Plugin> {
+        unsafe {
+            let result: Option<Plugin>;
+
+            if !lilv_plugins_is_end(self.plugins, self.iter) {
+                result = Some(Plugin { plugin: lilv_plugins_get(self.plugins, self.iter) })
+            } else {
+                result = None
+            }
+            self.iter = lilv_plugins_next(self.plugins, self.iter);
+            result
+        }
+    }
+}
+
+
 impl World {
     pub fn new() -> World {
         unsafe {
@@ -113,20 +155,25 @@ impl World {
         }
     }
 
-    pub fn get_all_plugins(&self) -> Vec<Plugin> {
-        let mut result:Vec<Plugin> = vec![];
-        unsafe {
-            let plugins = lilv_world_get_all_plugins(self.world);
+    // pub fn get_all_plugins(&self) -> Vec<Plugin> {
+    //     let mut result:Vec<Plugin> = vec![];
+    //     unsafe {
+    //         let plugins = lilv_world_get_all_plugins(self.world);
 
-            let mut iter = lilv_plugins_begin(plugins);
-            while !lilv_plugins_is_end(plugins, iter) {
-                result.push(Plugin {
-                    plugin: lilv_plugins_get(plugins, iter)
-                });
-                iter = lilv_plugins_next(plugins, iter);
-            }
+    //         let mut iter = lilv_plugins_begin(plugins);
+    //         while !lilv_plugins_is_end(plugins, iter) {
+    //             result.push(Plugin {
+    //                 plugin: lilv_plugins_get(plugins, iter)
+    //             });
+    //             iter = lilv_plugins_next(plugins, iter);
+    //         }
+    //     }
+    //     result
+    // }
+    pub fn get_all_plugins(&self) -> Plugins {
+        unsafe {
+            Plugins { plugins: lilv_world_get_all_plugins(self.world) }
         }
-        result
     }
 }
 
