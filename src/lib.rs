@@ -39,6 +39,8 @@ pub struct Port {
 #[link(name = "lilv-0")]
 extern {
     //...
+    fn lilv_new_uri(world: *mut LilvWorld, uri: *const ::std::os::raw::c_char) -> *mut LilvNode;
+
     fn lilv_nodes_free(collection: *const LilvNodes);
     fn lilv_nodes_size(collection: *const LilvNodes) -> u32;
     fn lilv_nodes_begin(collection: *const LilvNodes) -> *mut LilvIter;
@@ -52,7 +54,7 @@ extern {
     fn lilv_plugins_get(collection: *const LilvPlugins, i: *mut LilvIter) -> *const LilvPlugin;
     fn lilv_plugins_next(collection: *const LilvPlugins, i: *mut LilvIter) -> *mut LilvIter;
     fn lilv_plugins_is_end(collection: *const LilvPlugins, i: *mut LilvIter) -> bool;
-    fn lilv_plugins_get_by_uri(collection: *const LilvPlugins, uri: *const LilvNode) -> *const LilvPlugin;
+    fn lilv_plugins_get_by_uri(plugins: *const LilvPlugins, uri: *const LilvNode) -> *const LilvPlugin;
 
     fn lilv_world_new() -> *mut LilvWorld;
     fn lilv_world_set_option(world: *mut LilvWorld, uri: *const ::std::os::raw::c_char, value: *const LilvNode);
@@ -103,6 +105,20 @@ extern {
     fn lilv_port_get_name(plugin: *const LilvPlugin, port: *const LilvPort) -> *mut LilvNode;
 }
 
+impl Plugins {
+    pub fn get_by_uri(&self, uri: Node) -> Option<Plugin> {
+        unsafe {
+            let plugin_ptr = lilv_plugins_get_by_uri(self.plugins, uri.node);
+
+            if plugin_ptr.is_null() {
+                None
+            } else {
+                Some(Plugin { plugin: plugin_ptr })
+            }
+        }
+    }
+}
+
 impl IntoIterator for Plugins {
     type Item = Plugin;
     type IntoIter = PluginsIterator;
@@ -144,8 +160,24 @@ impl Iterator for PluginsIterator {
 impl World {
     pub fn new() -> World {
         unsafe {
-            let inner_world = lilv_world_new();
-            World { world: inner_world }
+            World { world: lilv_world_new() }
+        }
+    }
+
+    pub fn new_uri(&self, uri: &str) -> Option<Node> {
+        unsafe {
+            let c_uri = match std::ffi::CString::new(uri) {
+                Ok(s) => s,
+                Err(e) => return None
+            };
+
+            let node_ptr = lilv_new_uri(self.world, c_uri.as_ptr());
+
+            if node_ptr.is_null() {
+                None
+            } else {
+                Some(Node { node: node_ptr })
+            }
         }
     }
 
@@ -155,21 +187,6 @@ impl World {
         }
     }
 
-    // pub fn get_all_plugins(&self) -> Vec<Plugin> {
-    //     let mut result:Vec<Plugin> = vec![];
-    //     unsafe {
-    //         let plugins = lilv_world_get_all_plugins(self.world);
-
-    //         let mut iter = lilv_plugins_begin(plugins);
-    //         while !lilv_plugins_is_end(plugins, iter) {
-    //             result.push(Plugin {
-    //                 plugin: lilv_plugins_get(plugins, iter)
-    //             });
-    //             iter = lilv_plugins_next(plugins, iter);
-    //         }
-    //     }
-    //     result
-    // }
     pub fn get_all_plugins(&self) -> Plugins {
         unsafe {
             Plugins { plugins: lilv_world_get_all_plugins(self.world) }
